@@ -42,8 +42,8 @@ extension BleTransport: BleModuleDelegate {
     
     private var scanDuration: TimeInterval = 5.0 /// `scanDuration` will be overriden every time a value gets passed to `scan/create`
     
-    private var peripheralsServicesTuple = [PeripheralInfo]()
-    private var connectedPeripheral: PeripheralIdentifier?
+    public var peripheralsServicesTuple = [PeripheralInfo]()
+    public var connectedPeripheral: PeripheralIdentifier?
     private var bluetoothAvailabilityCompletion: ((Bool)->())?
     private var bluetoothStateCompletion: ((CBManagerState)->())?
     private var notifyDisconnectedCompletion: EmptyResponse?
@@ -395,12 +395,16 @@ extension BleTransport: BleModuleDelegate {
         }
     }
     
-    fileprivate func currentConnectedTuple() -> Result<(PeripheralIdentifier, PeripheralInfo, BleService), BleTransportError> {
+    public func currentConnectedTuple() -> Result<(PeripheralIdentifier, PeripheralInfo, BleService), BleTransportError> {
         guard let connectedPeripheral = connectedPeripheral else { return .failure(.currentConnectedError(description: "Not connected")) }
         guard let connectedPeripheralTuple = peripheralsServicesTuple.first(where: { $0.peripheral.uuid == connectedPeripheral.uuid }) else { return .failure(.currentConnectedError(description: "peripheralsServiceTuple doesn't contain connected peripheral UUID")) }
         guard let peripheralService = configuration.serviceMatching(serviceUUID: connectedPeripheralTuple.serviceUUID) else { return .failure(.currentConnectedError(description: "No matching peripheralService")) }
         
         return .success((connectedPeripheral, connectedPeripheralTuple, peripheralService))
+    }
+    
+    public func currentConnectedService() throws -> String {
+        try currentConnectedTuple().get().2.service.uuid.uuidString
     }
     
     /**
