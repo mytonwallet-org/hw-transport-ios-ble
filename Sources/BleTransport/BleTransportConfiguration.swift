@@ -28,11 +28,23 @@ public class BleTransportConfiguration: NSObject {
         let nanoFTSNotifyCharacteristicUUID = "13d63400-2c97-6004-0001-4c6564676572"
         let nanoFTSWriteWithResponseCharacteristicUUID = "13d63400-2c97-6004-0002-4c6564676572"
         let nanoFTSWriteWithoutResponseCharacteristicUUID = "13d63400-2c97-6004-0003-4c6564676572"
+
+        let ledgerFlexServiceUUID = "13d63400-2c97-3004-0000-4c6564676572"
+        let ledgerFlexNotifyCharacteristicUUID = "13d63400-2c97-3004-0001-4c6564676572"
+        let ledgerFlexWriteWithResponseCharacteristicUUID = "13d63400-2c97-3004-0002-4c6564676572"
+        let ledgerFlexWriteWithoutResponseCharacteristicUUID = "13d63400-2c97-3004-0003-4c6564676572"
+
+        let ledgerApexServiceUUID = "13d63400-2c97-8004-0000-4c6564676572"
+        let ledgerApexNotifyCharacteristicUUID = "13d63400-2c97-8004-0001-4c6564676572"
+        let ledgerApexWriteWithResponseCharacteristicUUID = "13d63400-2c97-8004-0002-4c6564676572"
+        let ledgerApexWriteWithoutResponseCharacteristicUUID = "13d63400-2c97-8004-0003-4c6564676572"
         
         let nanoXService = BleService(serviceUUID: nanoXServiceUUID, notifyUUID: nanoXNotifyCharacteristicUUID, writeWithResponseUUID: nanoXWriteWithResponseCharacteristicUUID, writeWithoutResponseUUID: nanoXWriteWithoutResponseCharacteristicUUID)
         let nanoFTSService = BleService(serviceUUID: nanoFTSServiceUUID, notifyUUID: nanoFTSNotifyCharacteristicUUID, writeWithResponseUUID: nanoFTSWriteWithResponseCharacteristicUUID, writeWithoutResponseUUID: nanoFTSWriteWithoutResponseCharacteristicUUID)
+        let ledgerFlexService = BleService(serviceUUID: ledgerFlexServiceUUID, notifyUUID: ledgerFlexNotifyCharacteristicUUID, writeWithResponseUUID: ledgerFlexWriteWithResponseCharacteristicUUID, writeWithoutResponseUUID: ledgerFlexWriteWithoutResponseCharacteristicUUID)
+        let ledgerApexService = BleService(serviceUUID: ledgerApexServiceUUID, notifyUUID: ledgerApexNotifyCharacteristicUUID, writeWithResponseUUID: ledgerApexWriteWithResponseCharacteristicUUID, writeWithoutResponseUUID: ledgerApexWriteWithoutResponseCharacteristicUUID)
         
-        return BleTransportConfiguration(services: [nanoXService, nanoFTSService])
+        return BleTransportConfiguration(services: [nanoXService, nanoFTSService, ledgerFlexService, ledgerApexService])
     }
     
     public func serviceMatching(serviceUUID: CBUUID) -> BleService? {
