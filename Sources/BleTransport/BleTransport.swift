@@ -292,35 +292,50 @@ extension BleTransport: BleModuleDelegate {
     }
     
     public func getAppAndVersion(success: @escaping ((AppInfo)->()), failure: @escaping ErrorResponse) {
-        let apdu = APDU(data: [0xb0, 0x01, 0x00, 0x00])
-        exchange(apdu: apdu) { result in
+        exchange(apdu: APDUs.getAppAndVersion) { result in
             switch result {
-            case .success(let string):
-                let data = string.UInt8Array()
-                var i = 0
-                let format = data[i]
-                if format != 1 {
-                    failure(BleTransportError.lowerLevelError(description: "Format is not supported"))
-                    return
+            case .success(let response):
+                do {
+                    success(try Self.parseAppAndVersion(response))
+                } catch {
+                    failure(error)
                 }
-                i += 1
-                let nameLength = Int(data[i])
-                i += 1
-                let nameData = data[i..<i+Int(nameLength)]
-                i += nameLength
-                let versionLength = Int(data[i])
-                i += 1
-                let versionData = data[i..<i+Int(versionLength)]
-                i += versionLength
-                guard let name = String(data: Data(nameData), encoding: .ascii) else { failure(BleTransportError.lowerLevelError(description: "Could not parse response data")); return }
-                guard let version = String(data: Data(versionData), encoding: .ascii) else { failure(BleTransportError.lowerLevelError(description: "Could not parse response data")); return }
-                success(AppInfo(name: name, version: version))
             case .failure(let error):
                 failure(error)
             }
         }
     }
-    
+
+    static func parseAppAndVersion(_ response: String) throws -> AppInfo {
+        if let error = parseStatus(response: response) {
+            throw error
+        }
+        let data = Array(response.UInt8Array().dropLast(2))
+        guard let format = data.first else {
+            throw BleStatusError.couldNotParseResponseData(status: "9000")
+        }
+        guard format == 1 else {
+            throw BleStatusError.formatNotSupported(status: "9000")
+        }
+        var offset = 1
+        func readString() throws -> String {
+            guard offset < data.count else {
+                throw BleStatusError.couldNotParseResponseData(status: "9000")
+            }
+            let length = Int(data[offset])
+            offset += 1
+            guard length > 0, length <= data.count - offset,
+                  let value = String(bytes: data[offset..<offset + length], encoding: .ascii) else {
+                throw BleStatusError.couldNotParseResponseData(status: "9000")
+            }
+            offset += length
+            return value
+        }
+        let name = try readString()
+        let version = try readString()
+        return AppInfo(name: name, version: version)
+    }
+
     public func openAppIfNeeded(_ name: String, completion: @escaping (Result<Void, Error>) -> Void) {
         Task() {
             do {
@@ -537,7 +552,6 @@ extension BleTransport: BleModuleDelegate {
     }
     
     fileprivate func openApp(_ name: String, success: @escaping EmptyResponse, failure: @escaping ErrorResponse) {
-        let errorCodes: [BleStatusError: [String]] = [.userRejected(status: ""): ["6985", "5501"], .appNotAvailableInDevice(status: ""): ["6984", "6807"]]
         let nameData = Data(name.utf8)
         var data: [UInt8] = [0xe0, 0xd8, 0x00, 0x00]
         data.append(UInt8(nameData.count))
@@ -559,7 +573,7 @@ extension BleTransport: BleModuleDelegate {
             
             switch result {
             case .success(let response):
-                if let error = self.parseStatus(response: response, errorCodes: errorCodes) {
+                if let error = Self.parseStatus(response: response) {
                     failure(error)
                 } else {
                     self.notifyDisconnected {
@@ -578,7 +592,7 @@ extension BleTransport: BleModuleDelegate {
     
     /// Never call this method directly since some apps (like Bitcoin) will hang the execution if `getAppAndVersion` is not called right before
     fileprivate func closeApp(success: @escaping EmptyResponse, failure: @escaping ErrorResponse) {
-        let apdu = APDU(data: [0xb0, 0xa7, 0x00, 0x00])
+        let apdu = APDUs.closeApp
         
         let connectedPeripheral: PeripheralIdentifier
         switch currentConnectedTuple() {
@@ -594,7 +608,11 @@ extension BleTransport: BleModuleDelegate {
             guard let disconnectedCallback = self.disconnectedCallback else { failure(BleTransportError.lowerLevelError(description: "closeApp -> disconnectedCallback is nil")); return }
             
             switch result {
-            case .success(_):
+            case .success(let response):
+                if let error = Self.parseStatus(response: response) {
+                    failure(error)
+                    return
+                }
                 self.notifyDisconnected {
                     self.connect(toPeripheralID: connectedPeripheral, disconnectedCallback: disconnectedCallback) { _ in
                         success()
@@ -608,37 +626,26 @@ extension BleTransport: BleModuleDelegate {
         }
     }
     
-    fileprivate func parseStatus(response: String, errorCodes: [BleStatusError: [String]]) -> BleStatusError? {
-        let status = String(response.suffix(4))
-        if status.count == 4 {
-            if status == "9000" {
-                return nil
-            } else {
-                if let error = errorCodes.first(where: { $0.value.contains(status) })?.key {
-                    /// `error` here is a BleStatusError which we used to group the status codes that match the associated value `status` it has is empty because we didn't know the appropriate status then so we re-generate it here
-                    switch error {
-                    case .userRejected(_):
-                        return .userRejected(status: status)
-                    case .appNotAvailableInDevice(_):
-                        return .appNotAvailableInDevice(status: status)
-                    case .formatNotSupported(_):
-                        return .formatNotSupported(status: status)
-                    case .couldNotParseResponseData(_):
-                        return .couldNotParseResponseData(status: status)
-                    case .unknown(_):
-                        return .unknown(status: status)
-                    case .noStatus:
-                        return .noStatus
-                    }
-                } else {
-                    return .unknown(status: status)
-                }
-            }
-        } else {
+    static func parseStatus(response: String) -> BleStatusError? {
+        guard response.count >= 4, response.count % 2 == 0,
+              response.utf8.allSatisfy({ (48...57).contains($0) || (65...70).contains($0) || (97...102).contains($0) }) else {
             return .noStatus
         }
+        let status = String(response.suffix(4)).lowercased()
+        switch status {
+        case "9000":
+            return nil
+        case "5515":
+            return .deviceLocked(status: status)
+        case "6985", "5501":
+            return .userRejected(status: status)
+        case "6984", "6807":
+            return .appNotAvailableInDevice(status: status)
+        default:
+            return .unknown(status: status)
+        }
     }
-    
+
     private func createConnectFunction(success: @escaping PeripheralResponse, failure: @escaping BleErrorResponse) -> ConnectFunction {
         return { (peripheral: PeripheralIdentifier) in
             self.bleModule.connect(peripheralIdentifier: peripheral, timeout: .seconds(5)) { [weak self] result in
