@@ -89,6 +89,9 @@ public class APDU: Sendable, Receivable {
 }
 
 class APDUs: NSObject {
+    static var getAppAndVersion: APDU { APDU(data: [0xb0, 0x01, 0x00, 0x00, 0x00]) }
+    static var closeApp: APDU { APDU(data: [0xb0, 0xa7, 0x00, 0x00, 0x00]) }
+
     public static let openBitcoin: [APDU] = [APDU(raw: "e0d8000007426974636f696e")]
 }
 

@@ -9,6 +9,7 @@ import Foundation
 
 /// Errors received as `status` sent in a message from a device
 public enum BleStatusError: LocalizedError, Hashable {
+    case deviceLocked(status: String)
     case userRejected(status: String)
     case appNotAvailableInDevice(status: String)
     case formatNotSupported(status: String)
@@ -18,6 +19,8 @@ public enum BleStatusError: LocalizedError, Hashable {
     
     public var errorDescription: String? {
         switch self {
+        case .deviceLocked(_):
+            return "Device is locked"
         case .userRejected(_):
             return "User rejected action"
         case .appNotAvailableInDevice(_):
@@ -35,6 +38,8 @@ public enum BleStatusError: LocalizedError, Hashable {
     
     public var status: String? {
         switch self {
+        case .deviceLocked(let status):
+            return status
         case .userRejected(let status):
             return status
         case .appNotAvailableInDevice(let status):
